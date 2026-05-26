@@ -1,111 +1,91 @@
 import streamlit as st
-import random
-import time
+import pandas as pd
 
 # 페이지 설정
-st.set_page_config(page_title="💩 똥피하기 게임", layout="centered")
+st.set_page_config(
+    page_title="수행평가 일정표",
+    page_icon="📚",
+    layout="centered"
+)
 
-st.title("💩 똥피하기 게임")
-st.write("좌우 버튼으로 똥을 피해보세요!")
-
-# 게임 크기
-WIDTH = 7
-HEIGHT = 10
+st.title("📚 수행평가 일정표 만들기")
+st.write("수행평가 일정을 입력하고 출력해보세요!")
 
 # 세션 상태 초기화
-if "player" not in st.session_state:
-    st.session_state.player = WIDTH // 2
+if "tasks" not in st.session_state:
+    st.session_state.tasks = []
 
-if "poop_x" not in st.session_state:
-    st.session_state.poop_x = random.randint(0, WIDTH - 1)
+# -----------------------------
+# 입력 폼
+# -----------------------------
+with st.form("task_form"):
 
-if "poop_y" not in st.session_state:
-    st.session_state.poop_y = 0
+    subject = st.text_input("과목")
+    task = st.text_input("수행평가 내용")
+    date = st.date_input("제출 날짜")
+    memo = st.text_input("메모")
 
-if "score" not in st.session_state:
-    st.session_state.score = 0
+    submit = st.form_submit_button("추가하기")
 
-if "game_over" not in st.session_state:
-    st.session_state.game_over = False
+    if submit:
 
-# -----------------------
-# 이동 버튼
-# -----------------------
-col1, col2, col3 = st.columns([1,1,1])
+        if subject and task:
+            st.session_state.tasks.append({
+                "과목": subject,
+                "수행평가": task,
+                "제출일": date,
+                "메모": memo
+            })
 
-with col1:
-    if st.button("⬅️ 왼쪽"):
-        if st.session_state.player > 0:
-            st.session_state.player -= 1
-
-with col3:
-    if st.button("오른쪽 ➡️"):
-        if st.session_state.player < WIDTH - 1:
-            st.session_state.player += 1
-
-# -----------------------
-# 게임 진행
-# -----------------------
-if not st.session_state.game_over:
-
-    # 똥 아래로 이동
-    st.session_state.poop_y += 1
-
-    # 충돌 체크
-    if (
-        st.session_state.poop_y == HEIGHT - 1
-        and st.session_state.poop_x == st.session_state.player
-    ):
-        st.session_state.game_over = True
-
-    # 점수 증가 + 새 똥 생성
-    elif st.session_state.poop_y >= HEIGHT:
-        st.session_state.score += 1
-        st.session_state.poop_y = 0
-        st.session_state.poop_x = random.randint(0, WIDTH - 1)
-
-# -----------------------
-# 게임 화면 출력
-# -----------------------
-board = []
-
-for y in range(HEIGHT):
-    row = ""
-
-    for x in range(WIDTH):
-
-        # 똥
-        if x == st.session_state.poop_x and y == st.session_state.poop_y:
-            row += "💩"
-
-        # 플레이어
-        elif y == HEIGHT - 1 and x == st.session_state.player:
-            row += "😎"
+            st.success("일정이 추가되었습니다!")
 
         else:
-            row += "⬜"
+            st.warning("과목과 수행평가 내용을 입력해주세요.")
 
-    board.append(row)
+# -----------------------------
+# 일정표 출력
+# -----------------------------
+st.markdown("---")
+st.subheader("🗓️ 수행평가 일정표")
 
-# 화면 출력
-for row in board:
-    st.markdown(f"## {row}")
+if st.session_state.tasks:
 
-# 점수
-st.subheader(f"🏆 점수: {st.session_state.score}")
+    df = pd.DataFrame(st.session_state.tasks)
 
-# 게임 오버
-if st.session_state.game_over:
-    st.error("💥 게임 오버!")
+    # 날짜순 정렬
+    df = df.sort_values(by="제출일")
 
-    if st.button("다시 시작"):
-        st.session_state.player = WIDTH // 2
-        st.session_state.poop_x = random.randint(0, WIDTH - 1)
-        st.session_state.poop_y = 0
-        st.session_state.score = 0
-        st.session_state.game_over = False
-        st.rerun()
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
 
-# 자동 새로고침
-time.sleep(0.5)
-st.rerun()
+    # CSV 다운로드
+    csv = df.to_csv(index=False).encode("utf-8-sig")
+
+    st.download_button(
+        label="📥 일정표 다운로드 (CSV)",
+        data=csv,
+        file_name="수행평가_일정표.csv",
+        mime="text/csv"
+    )
+
+    st.info("💡 Ctrl + P 를 누르면 프린트할 수 있어요!")
+
+else:
+    st.write("아직 입력된 일정이 없습니다.")
+
+# -----------------------------
+# 전체 삭제
+# -----------------------------
+if st.button("🗑️ 전체 삭제"):
+
+    st.session_state.tasks = []
+    st.rerun()
+
+# -----------------------------
+# 하단
+# -----------------------------
+st.markdown("---")
+st.caption("Made with Streamlit ❤️")
