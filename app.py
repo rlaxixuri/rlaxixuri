@@ -1,86 +1,111 @@
 import streamlit as st
-from datetime import datetime
+import random
+import time
 
 # 페이지 설정
-st.set_page_config(
-    page_title="외모관리 앱",
-    page_icon="✨",
-    layout="centered"
-)
+st.set_page_config(page_title="💩 똥피하기 게임", layout="centered")
 
-# 제목
-st.title("✨ 외모관리 앱")
-st.write("매일 자기관리를 기록해보세요!")
+st.title("💩 똥피하기 게임")
+st.write("좌우 버튼으로 똥을 피해보세요!")
 
-# 오늘 날짜
-today = datetime.today().strftime("%Y-%m-%d")
-st.subheader(f"📅 오늘 날짜: {today}")
+# 게임 크기
+WIDTH = 7
+HEIGHT = 10
 
-# ---------------------------
-# 루틴 체크
-# ---------------------------
-st.header("✅ 오늘의 루틴")
+# 세션 상태 초기화
+if "player" not in st.session_state:
+    st.session_state.player = WIDTH // 2
 
-water = st.checkbox("물 2L 마시기")
-exercise = st.checkbox("운동하기")
-skincare = st.checkbox("스킨케어 하기")
-sleep = st.checkbox("7시간 이상 자기")
+if "poop_x" not in st.session_state:
+    st.session_state.poop_x = random.randint(0, WIDTH - 1)
 
-# 진행률 계산
-count = sum([water, exercise, skincare, sleep])
-progress = count / 4
+if "poop_y" not in st.session_state:
+    st.session_state.poop_y = 0
 
-st.progress(progress)
-st.write(f"오늘의 달성률: {int(progress * 100)}%")
+if "score" not in st.session_state:
+    st.session_state.score = 0
 
-# ---------------------------
-# 피부 상태
-# ---------------------------
-st.header("🧴 피부 상태 기록")
+if "game_over" not in st.session_state:
+    st.session_state.game_over = False
 
-skin = st.selectbox(
-    "오늘 피부 상태",
-    ["좋음", "보통", "건조함", "트러블", "민감함"]
-)
+# -----------------------
+# 이동 버튼
+# -----------------------
+col1, col2, col3 = st.columns([1,1,1])
 
-st.write(f"오늘 피부 상태: **{skin}**")
+with col1:
+    if st.button("⬅️ 왼쪽"):
+        if st.session_state.player > 0:
+            st.session_state.player -= 1
 
-# ---------------------------
-# 운동 기록
-# ---------------------------
-st.header("🏋️ 운동 기록")
+with col3:
+    if st.button("오른쪽 ➡️"):
+        if st.session_state.player < WIDTH - 1:
+            st.session_state.player += 1
 
-exercise_type = st.selectbox(
-    "운동 종류",
-    ["헬스", "러닝", "요가", "홈트", "걷기"]
-)
+# -----------------------
+# 게임 진행
+# -----------------------
+if not st.session_state.game_over:
 
-exercise_time = st.slider("운동 시간 (분)", 0, 180, 30)
+    # 똥 아래로 이동
+    st.session_state.poop_y += 1
 
-st.write(f"{exercise_type} {exercise_time}분 완료!")
+    # 충돌 체크
+    if (
+        st.session_state.poop_y == HEIGHT - 1
+        and st.session_state.poop_x == st.session_state.player
+    ):
+        st.session_state.game_over = True
 
-# ---------------------------
-# 식단 기록
-# ---------------------------
-st.header("🥗 오늘 먹은 음식")
+    # 점수 증가 + 새 똥 생성
+    elif st.session_state.poop_y >= HEIGHT:
+        st.session_state.score += 1
+        st.session_state.poop_y = 0
+        st.session_state.poop_x = random.randint(0, WIDTH - 1)
 
-food = st.text_input("음식 입력")
+# -----------------------
+# 게임 화면 출력
+# -----------------------
+board = []
 
-if food:
-    st.success(f"'{food}' 기록 완료!")
+for y in range(HEIGHT):
+    row = ""
 
-# ---------------------------
-# 메모
-# ---------------------------
-st.header("📝 오늘의 메모")
+    for x in range(WIDTH):
 
-memo = st.text_area("자유롭게 작성하세요")
+        # 똥
+        if x == st.session_state.poop_x and y == st.session_state.poop_y:
+            row += "💩"
 
-if st.button("저장하기"):
-    st.success("오늘 기록 저장 완료! ✨")
+        # 플레이어
+        elif y == HEIGHT - 1 and x == st.session_state.player:
+            row += "😎"
 
-# ---------------------------
-# 하단
-# ---------------------------
-st.markdown("---")
-st.caption("Made with Streamlit ❤️")
+        else:
+            row += "⬜"
+
+    board.append(row)
+
+# 화면 출력
+for row in board:
+    st.markdown(f"## {row}")
+
+# 점수
+st.subheader(f"🏆 점수: {st.session_state.score}")
+
+# 게임 오버
+if st.session_state.game_over:
+    st.error("💥 게임 오버!")
+
+    if st.button("다시 시작"):
+        st.session_state.player = WIDTH // 2
+        st.session_state.poop_x = random.randint(0, WIDTH - 1)
+        st.session_state.poop_y = 0
+        st.session_state.score = 0
+        st.session_state.game_over = False
+        st.rerun()
+
+# 자동 새로고침
+time.sleep(0.5)
+st.rerun()
