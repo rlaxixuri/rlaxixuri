@@ -1,91 +1,154 @@
 import streamlit as st
-import pandas as pd
+from google import genai
+from google.genai import types
 
+# -------------------
 # 페이지 설정
+# -------------------
 st.set_page_config(
-    page_title="수행평가 일정표",
-    page_icon="📚",
+    page_title="연애상담 챗봇",
+    page_icon="💕",
     layout="centered"
 )
 
-st.title("📚 수행평가 일정표 만들기")
-st.write("수행평가 일정을 입력하고 출력해보세요!")
+st.title("💕 연애상담 챗봇")
+st.caption("Gemini 2.5 Flash Lite 기반")
 
+# -------------------
+# API Key 로드
+# -------------------
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+except Exception:
+    st.error("Secrets에 GEMINI_API_KEY가 설정되지 않았습니다.")
+    st.stop()
+
+# -------------------
+# Gemini Client
+# -------------------
+try:
+    client = genai.Client(api_key=api_key)
+except Exception as e:
+    st.error(f"Gemini 클라이언트 생성 실패: {e}")
+    st.stop()
+
+# -------------------
 # 세션 상태 초기화
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
+# -------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "content": (
+                "안녕하세요 😊\n\n"
+                "연애, 썸, 이별, 재회, 고백, 장거리 연애 등 "
+                "무엇이든 편하게 상담해 주세요."
+            )
+        }
+    ]
 
-# -----------------------------
-# 입력 폼
-# -----------------------------
-with st.form("task_form"):
+# -------------------
+# 기존 대화 출력
+# -------------------
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-    subject = st.text_input("과목")
-    task = st.text_input("수행평가 내용")
-    date = st.date_input("제출 날짜")
-    memo = st.text_input("메모")
+# -------------------
+# 사용자 입력
+# -------------------
+prompt = st.chat_input("고민을 입력해 주세요")
 
-    submit = st.form_submit_button("추가하기")
+if prompt:
 
-    if submit:
-
-        if subject and task:
-            st.session_state.tasks.append({
-                "과목": subject,
-                "수행평가": task,
-                "제출일": date,
-                "메모": memo
-            })
-
-            st.success("일정이 추가되었습니다!")
-
-        else:
-            st.warning("과목과 수행평가 내용을 입력해주세요.")
-
-# -----------------------------
-# 일정표 출력
-# -----------------------------
-st.markdown("---")
-st.subheader("🗓️ 수행평가 일정표")
-
-if st.session_state.tasks:
-
-    df = pd.DataFrame(st.session_state.tasks)
-
-    # 날짜순 정렬
-    df = df.sort_values(by="제출일")
-
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True
+    # 사용자 메시지 저장
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": prompt
+        }
     )
 
-    # CSV 다운로드
-    csv = df.to_csv(index=False).encode("utf-8-sig")
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-    st.download_button(
-        label="📥 일정표 다운로드 (CSV)",
-        data=csv,
-        file_name="수행평가_일정표.csv",
-        mime="text/csv"
+    # Gemini에 전달할 대화 구성
+    history_text = ""
+
+    for msg in st.session_state.messages:
+        role = "사용자" if msg["role"] == "user" else "상담사"
+        history_text += f"{role}: {msg['content']}\n"
+
+    full_prompt = f"""
+당신은 공감 능력이 뛰어난 전문 연애상담 코치입니다.
+
+규칙:
+- 친절하고 따뜻하게 답변
+- 비난하지 말 것
+- 현실적인 조언 제공
+- 위험하거나 폭력적인 행동은 권장하지 말 것
+- 답변은 한국어
+
+대화 기록:
+{history_text}
+
+상담 답변:
+"""
+
+    with st.chat_message("assistant"):
+        try:
+            with st.spinner("생각 중..."):
+
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash-lite",
+                    contents=full_prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.8,
+                        max_output_tokens=1000,
+                    )
+                )
+
+                answer = response.text
+
+                st.markdown(answer)
+
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": answer
+                    }
+                )
+
+        except Exception as e:
+            error_msg = f"오류가 발생했습니다.\n\n{str(e)}"
+
+            st.error(error_msg)
+
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": error_msg
+                }
+            )
+
+# -------------------
+# 사이드바
+# -------------------
+with st.sidebar:
+
+    st.header("설정")
+
+    if st.button("대화 초기화"):
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": "대화가 초기화되었습니다 😊"
+            }
+        ]
+        st.rerun()
+
+    st.info(
+        "GitHub → Streamlit Community Cloud로 "
+        "배포 가능한 예제입니다."
     )
-
-    st.info("💡 Ctrl + P 를 누르면 프린트할 수 있어요!")
-
-else:
-    st.write("아직 입력된 일정이 없습니다.")
-
-# -----------------------------
-# 전체 삭제
-# -----------------------------
-if st.button("🗑️ 전체 삭제"):
-
-    st.session_state.tasks = []
-    st.rerun()
-
-# -----------------------------
-# 하단
-# -----------------------------
-st.markdown("---")
-st.caption("Made with Streamlit ❤️")
+        
