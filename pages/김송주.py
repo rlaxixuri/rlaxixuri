@@ -1,97 +1,79 @@
 import streamlit as st
-from datetime import date
 import random
 
 st.set_page_config(
     page_title="수행평가 알리미 뽑기",
-    page_icon="📚",
+    page_icon="📢",
     layout="centered"
 )
 
-st.title("📚 수행평가 알리미 뽑기")
-st.caption("등록한 수행평가 중 오늘 할 과제를 랜덤으로 뽑아보세요!")
+st.title("📢 수행평가 알리미 뽑기")
 
-# 세션 상태 초기화
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
+st.write(
+    """
+    수행평가 일정이나 준비물을
+    선생님께 알리거나 친구들에게 공지할 담당자를
+    랜덤으로 뽑아보세요!
+    """
+)
 
-# 수행평가 추가
-st.subheader("➕ 수행평가 등록")
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-with st.form("add_task"):
-    subject = st.text_input("과목명")
-    task_name = st.text_input("수행평가 이름")
-    due_date = st.date_input("마감일", min_value=date.today())
+default_names = """김민수
+이서준
+박지호
+최유진
+정하준"""
 
-    submitted = st.form_submit_button("등록")
+names_text = st.text_area(
+    "학생 이름 입력 (한 줄에 한 명)",
+    value=default_names,
+    height=200
+)
 
-    if submitted:
-        try:
-            if not subject.strip():
-                st.error("과목명을 입력하세요.")
-            elif not task_name.strip():
-                st.error("수행평가 이름을 입력하세요.")
-            else:
-                st.session_state.tasks.append({
-                    "subject": subject.strip(),
-                    "task": task_name.strip(),
-                    "due": due_date
-                })
-                st.success("수행평가가 등록되었습니다.")
-        except Exception as e:
-            st.error(f"오류가 발생했습니다: {e}")
+col1, col2 = st.columns(2)
 
-st.divider()
-
-# 목록 출력
-st.subheader("📋 등록된 수행평가")
-
-if st.session_state.tasks:
-    sorted_tasks = sorted(
-        st.session_state.tasks,
-        key=lambda x: x["due"]
+with col1:
+    draw_button = st.button(
+        "🎲 뽑기",
+        use_container_width=True
     )
 
-    for idx, task in enumerate(sorted_tasks):
-        days_left = (task["due"] - date.today()).days
-
-        st.write(
-            f"**{idx+1}. [{task['subject']}] {task['task']}** "
-            f"(마감: {task['due']}, D-{days_left})"
-        )
-
-    nearest = min(st.session_state.tasks, key=lambda x: x["due"])
-
-    st.info(
-        f"⏰ 가장 급한 수행평가: "
-        f"[{nearest['subject']}] {nearest['task']} "
-        f"(마감 {nearest['due']})"
+with col2:
+    reset_button = st.button(
+        "🗑 기록 초기화",
+        use_container_width=True
     )
 
-else:
-    st.warning("등록된 수행평가가 없습니다.")
+if reset_button:
+    st.session_state.history = []
+    st.success("기록이 초기화되었습니다.")
 
-st.divider()
-
-# 랜덤 뽑기
-st.subheader("🎲 오늘의 수행평가 뽑기")
-
-if st.button("뽑기!"):
+if draw_button:
     try:
-        if not st.session_state.tasks:
-            st.warning("먼저 수행평가를 등록하세요.")
+        names = [
+            name.strip()
+            for name in names_text.split("\n")
+            if name.strip()
+        ]
+
+        names = list(dict.fromkeys(names))
+
+        if len(names) < 2:
+            st.error("최소 2명 이상의 이름을 입력해주세요.")
         else:
-            selected = random.choice(st.session_state.tasks)
+            winner = random.choice(names)
 
-            st.success(
+            st.session_state.history.insert(0, winner)
+
+            st.success("🎉 선정 완료!")
+
+            st.markdown(
                 f"""
-                🎯 오늘의 수행평가
+                ## 📢 오늘의 수행평가 알리미
 
-                과목: {selected['subject']}
-                
-                수행평가: {selected['task']}
-                
-                마감일: {selected['due']}
+                # 🏆 {winner}
                 """
             )
 
@@ -100,25 +82,13 @@ if st.button("뽑기!"):
 
 st.divider()
 
-# 삭제 기능
-st.subheader("🗑 수행평가 삭제")
+st.subheader("📋 이전 뽑기 기록")
 
-if st.session_state.tasks:
-    options = [
-        f"[{t['subject']}] {t['task']}"
-        for t in st.session_state.tasks
-    ]
-
-    selected_delete = st.selectbox(
-        "삭제할 수행평가 선택",
-        options
-    )
-
-    if st.button("삭제"):
-        try:
-            idx = options.index(selected_delete)
-            st.session_state.tasks.pop(idx)
-            st.success("삭제되었습니다.")
-            st.rerun()
-        except Exception as e:
-            st.error(f"삭제 중 오류 발생: {e}")
+if st.session_state.history:
+    for idx, person in enumerate(
+        st.session_state.history,
+        start=1
+    ):
+        st.write(f"{idx}. {person}")
+else:
+    st.info("아직 뽑기 기록이 없습니다.")
