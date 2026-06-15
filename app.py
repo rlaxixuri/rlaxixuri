@@ -1,88 +1,204 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+import pandas as pd
+from datetime import date
 
-st.set_page_config(page_title="연애상담 챗봇", page_icon="💌")
+st.set_page_config(
+    page_title="수행평가 가정통신문 생성기",
+    page_icon="📚",
+    layout="wide"
+)
 
-st.title("💌 연애상담 챗봇")
-st.caption("Gemini 2.5 Flash Lite 기반. 진지한 위기 상황은 전문가 도움을 권장해요.")
+st.title("📚 수행평가 가정통신문 생성기")
+st.caption("다가오는 수행평가를 날짜순으로 정리하여 학부모와 학생에게 안내합니다.")
 
-SYSTEM_PROMPT = """
-너는 따뜻하고 현실적인 연애상담 챗봇이다.
-사용자의 감정을 먼저 공감하고, 판단하지 말고, 구체적인 다음 행동을 제안한다.
-조작, 집착, 스토킹, 폭력, 자해 위험이 보이면 안전을 우선 안내한다.
-전문가가 필요한 상황은 상담사, 병원, 긴급기관 도움을 권한다.
-답변은 한국어로 자연스럽게 한다.
-"""
+COLUMNS = ["과목", "수행평가명", "평가일", "준비물", "비고"]
 
-def get_client():
-    api_key = st.secrets.get("GEMINI_API_KEY")
-    if not api_key:
-        st.error("GEMINI_API_KEY가 Secrets에 없습니다.")
-        st.stop()
-    return genai.Client(api_key=api_key)
+if "schedule_df" not in st.session_state:
+    st.session_state.schedule_df = pd.DataFrame(columns=COLUMNS)
 
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "assistant", "content": "안녕. 어떤 연애 고민이 있어? 편하게 말해줘 💬"}
-    ]
 
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+def get_sample_data():
+    return pd.DataFrame(
+        [
+            {
+                "과목": "국어",
+                "수행평가명": "독서 발표",
+                "평가일": date(2026, 6, 20),
+                "준비물": "발표 자료",
+                "비고": "3분 발표"
+            },
+            {
+                "과목": "과학",
+                "수행평가명": "실험 보고서 제출",
+                "평가일": date(2026, 6, 24),
+                "준비물": "실험 노트",
+                "비고": "개별 제출"
+            },
+            {
+                "과목": "영어",
+                "수행평가명": "영어 말하기",
+                "평가일": date(2026, 6, 28),
+                "준비물": "원고",
+                "비고": "암기 필수"
+            }
+        ]
+    )
 
-user_input = st.chat_input("고민을 입력하세요")
-
-if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    try:
-        client = get_client()
-
-        contents = []
-        for msg in st.session_state.messages:
-            if msg["role"] == "user":
-                role = "user"
-            elif msg["role"] == "assistant":
-                role = "model"
-            else:
-                continue
-
-            contents.append(
-                types.Content(
-                    role=role,
-                    parts=[types.Part(text=msg["content"])]
-                )
-            )
-
-        with st.chat_message("assistant"):
-            with st.spinner("답변을 생각하는 중..."):
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash-lite",
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        temperature=0.8,
-                    ),
-                )
-
-                answer = response.text or "답변을 생성하지 못했어요. 다시 한 번 말해줄래요?"
-                st.markdown(answer)
-
-        st.session_state.messages.append({"role": "assistant", "content": answer})
-
-    except Exception as e:
-        error_msg = f"오류가 발생했어요: {e}"
-        st.error(error_msg)
-        st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
 with st.sidebar:
-    st.header("설정")
-    if st.button("채팅 기록 초기화"):
-        st.session_state.messages = [
-            {"role": "assistant", "content": "채팅 기록을 초기화했어. 다시 고민을 말해줘 💬"}
+    st.header("⚙️ 관리 메뉴")
+
+    uploaded_file = st.file_uploader(
+        "CSV 업로드",
+        type=["csv"],
+        help="열 이름: 과목, 수행평가명, 평가일, 준비물, 비고"
+    )
+
+    if uploaded_file:
+        try:
+            uploaded_df = pd.read_csv(uploaded_file)
+
+            required_cols = set(COLUMNS)
+
+            if not required_cols.issubset(uploaded_df.columns):
+                st.error("CSV 열 이름이 올바르지 않습니다.")
+
+            else:
+                uploaded_df["평가일"] = pd.to_datetime(
+                    uploaded_df["평가일"]
+                ).dt.date
+
+                st.session_state.schedule_df = uploaded_df[COLUMNS]
+                st.success("CSV를 불러왔습니다.")
+
+        except Exception:
+            st.error("CSV 파일 형식을 확인해주세요.")
+
+    if st.button("샘플 데이터 불러오기"):
+        st.session_state.schedule_df = get_sample_data()
+        st.success("샘플 데이터를 불러왔습니다.")
+
+    if st.button("전체 일정 초기화"):
+        st.session_state.schedule_df = pd.DataFrame(columns=COLUMNS)
+        st.success("초기화되었습니다.")
+
+
+st.subheader("➕ 수행평가 등록")
+
+with st.form("add_schedule"):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        subject = st.text_input("과목")
+
+        exam_name = st.text_input("수행평가명")
+
+        exam_date = st.date_input(
+            "평가일",
+            min_value=date.today()
+        )
+
+    with col2:
+        materials = st.text_input("준비물")
+
+        note = st.text_area("비고")
+
+    submitted = st.form_submit_button("일정 추가")
+
+    if submitted:
+        if not subject.strip() or not exam_name.strip():
+            st.warning("과목과 수행평가명을 입력해주세요.")
+
+        else:
+            new_row = pd.DataFrame(
+                [
+                    {
+                        "과목": subject.strip(),
+                        "수행평가명": exam_name.strip(),
+                        "평가일": exam_date,
+                        "준비물": materials.strip(),
+                        "비고": note.strip()
+                    }
+                ]
+            )
+
+            st.session_state.schedule_df = pd.concat(
+                [st.session_state.schedule_df, new_row],
+                ignore_index=True
+            )
+
+            st.success("일정이 추가되었습니다.")
+
+
+today = date.today()
+
+df = st.session_state.schedule_df.copy()
+
+if not df.empty:
+    df["평가일"] = pd.to_datetime(df["평가일"]).dt.date
+
+    upcoming_df = df[df["평가일"] >= today].copy()
+
+    upcoming_df = upcoming_df.sort_values("평가일")
+
+    if not upcoming_df.empty:
+
+        upcoming_df["D-Day"] = upcoming_df["평가일"].apply(
+            lambda x: (
+                "오늘"
+                if (x - today).days == 0
+                else f"D-{(x - today).days}"
+            )
+        )
+
+        st.subheader("🗓️ 예정된 수행평가")
+
+        display_df = upcoming_df[
+            ["D-Day", "평가일", "과목", "수행평가명", "준비물", "비고"]
         ]
-        st.rerun()
+
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        csv = upcoming_df.to_csv(index=False).encode("utf-8-sig")
+
+        st.download_button(
+            label="📥 일정 CSV 다운로드",
+            data=csv,
+            file_name="수행평가일정.csv",
+            mime="text/csv"
+        )
+
+        st.subheader("🏠 가정통신문 미리보기")
+
+        notice = (
+            f"안녕하세요. 학부모님께 안내드립니다.\n\n"
+            f"아래는 예정된 수행평가 일정입니다.\n"
+            f"학생들이 미리 준비할 수 있도록 가정에서도 확인 부탁드립니다.\n\n"
+        )
+
+        for _, row in display_df.iterrows():
+            notice += (
+                f"• {row['평가일']} ({row['D-Day']})\n"
+                f"  - 과목: {row['과목']}\n"
+                f"  - 수행평가: {row['수행평가명']}\n"
+                f"  - 준비물: {row['준비물'] or '-'}\n"
+                f"  - 비고: {row['비고'] or '-'}\n\n"
+            )
+
+        notice += "감사합니다."
+
+        st.text_area(
+            "가정통신문 내용",
+            value=notice,
+            height=350
+        )
+
+    else:
+        st.info("예정된 수행평가가 없습니다.")
+
+else:
+    st.info("등록된 수행평가가 없습니다. 일정을 추가해 주세요.")
